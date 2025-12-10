@@ -16,7 +16,7 @@ class WannaQuack:
         self.subdir = set()
         self.executor = ThreadPoolExecutor()
         self.woker = []
-        self.password = ""
+        self.password = "duck4life"
 
     def init_aes(self):
         self.salt = os.urandom(16)
